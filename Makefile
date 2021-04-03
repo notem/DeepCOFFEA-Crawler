@@ -28,7 +28,7 @@ VOLUMES = \
 DEVICE=eno1
 
 # commandline arguments
-CRAWL_PARAMS=--user corr --password thr0wAway --host 107.191.98.54
+CRAWL_PARAMS=--user corr --password thr0wAway --host 107.191.98.54 --start 0 --batches 10000 --sites top-1m.csv --nic ${DEVICE}
 
 # Make routines
 build:

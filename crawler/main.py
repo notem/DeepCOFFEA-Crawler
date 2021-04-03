@@ -17,7 +17,8 @@ def main():
     parser.add_argument('--user', required=True)
     parser.add_argument('--host', required=True)
     parser.add_argument('--password', required=True)
-    parser.add_argument('--start', default=1, type=int)
+    parser.add_argument('--nic', default='eno1')
+    parser.add_argument('--start', default=0, type=int)
     parser.add_argument('--batches', default=10, type=int)
     parser.add_argument('--chunksize', default=100, type=int)
     parser.add_argument('--config', default="default")
@@ -38,7 +39,7 @@ def main():
 
     try:
         tbb_path = os.path.abspath('./tor-browser_en-US')
-        collector = TorCollector(args.user, args.host, args.password, torrc_config, tbb_path)
+        collector = TorCollector(args.user, args.host, args.password, torrc_config, tbb_path, args.nic)
         collector.run(args.start, args.batches, args.chunksize, webFile=args.sites)
     finally:
         # Close display

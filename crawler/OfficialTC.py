@@ -36,7 +36,7 @@ def time_limit(seconds):
 
 class TorCollector:
 
-    def __init__(self, name, host, password, torrc_dict, tbb_path):
+    def __init__(self, name, host, password, torrc_dict, tbb_path, host_nic):
         """
         Initializes Torcollector, param size is the number of websites to scan from the csv, and param length is how many packets to capture per flow 
         """
@@ -49,6 +49,7 @@ class TorCollector:
         self.devnull = open(os.devnull, 'w')
         self.torrc_dict = torrc_dict
         self.ssh_cmd_prefix = f"sshpass -p {self.password} ssh -l {self.sshName} -t {self.sshHost}"
+        self.host_nic = host_nic
 
         # setup TBB environment libraries
         if tbb_path:
@@ -100,7 +101,7 @@ class TorCollector:
             start,
             batch_count,
             chsize,
-            webFile="majestic_million.csv",
+            webFile="top-1m.csv",
             timeout_val=120,
             outflowfolder="outflow"):
         """ 
@@ -143,7 +144,7 @@ class TorCollector:
         self.resetExit()
         self.resetEntry()
         for j in range(0, chsize):
-            url = self.batch_urls.iloc[j][2]
+            url = self.batch_urls.iloc[j][1]
             print(url)
             self.lastURL = url
             self.runURL(url, j, timeout_val, outflowfolder)
@@ -175,11 +176,13 @@ class TorCollector:
 
         # start capture on proxy
         cmd = f"{self.ssh_cmd_prefix} tcpdump -s 114 -w {outflowfolder}/{url_id}.pcap"
-        self.tcpdumpProcessOut = self.startTcpDump(cmd.split(" "))
+        self.tcpdumpProcessOut = self.startTcpDump(cmd, 'proxy.log')
 
         # start capture on client
-        cmd = f"tcpdump -s 114 -w inflow/{url_id}.pcap"
-        self.tcpdumpProcessIn = self.startTcpDump(cmd.split(" "))
+        cmd = f"LD_LIBRARY_PATH= tcpdump -s 114 -w inflow/{url_id}.pcap -i {self.host_nic}"
+        self.tcpdumpProcessIn = self.startTcpDump(cmd, 'client.log')
+
+        sleep(1)
 
         # attempt a visit
         err = False
@@ -241,10 +244,11 @@ class TorCollector:
         self.tcpdumpProcessIn.terminate()
         self.tcpdumpProcessOut.terminate()
 
-    def startTcpDump(self, command):
-        return subprocess.Popen(command,
-                                stdout=self.devnull,
-                                stderr=subprocess.STDOUT)
+    def startTcpDump(self, command, log):
+        with open(log, 'w') as fi:
+            return subprocess.Popen(command,
+                                    stdout=fi,
+                                    stderr=subprocess.STDOUT, shell=True)
 
     def get_guard_ips(self, controller, flow):
         """ """
