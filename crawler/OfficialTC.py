@@ -218,7 +218,7 @@ class TorCollector:
             print("ERROR: SCP copy failed!")
 
         # delete pcap from proxy
-        cmd = f"{self.ssh_cmd_prefix} rm {outflowfolder}/{url_id}.pcap"
+        cmd = f"{self.ssh_cmd_prefix} rm {outflowfolder}/*"
         self.runProcess(cmd.split(" "))
 
         # log elapsed time
