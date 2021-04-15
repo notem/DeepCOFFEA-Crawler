@@ -165,7 +165,7 @@ class TorCollector:
             sleep(1)
 
             url = self.batch_urls.iloc[j][1]
-            print(f'[self.cur_batch_j] {url}', end='\n\r')
+            print(f'[{self.cur_batch}_{j}] {url}', end='\n\r')
             self.lastURL = url
             self.runURL(url, j, timeout_val, outflowfolder)
             self.total_count += 1
