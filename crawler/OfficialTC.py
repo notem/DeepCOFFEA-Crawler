@@ -60,6 +60,18 @@ class TorCollector:
 
         self.launchProcesses()
 
+    def launchProxy(self):
+        """
+        """
+        tunnelport = self.socks + 8
+        cmd = f"sshpass -p {self.password} ssh -D {tunnelport} -o".split(" ") \
+              + [f"ProxyCommand=nc -X 5 -x 127.0.0.1:{self.socks} %h %p"] \
+              + [f"{self.sshName}@{self.sshHost}"]
+        self.sshProcess = subprocess.Popen(cmd,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE)
+
+
     def launchProcesses(self):
         """
         """
@@ -71,12 +83,12 @@ class TorCollector:
                        timeout=270)
         # launch proxy
         tunnelport = self.socks + 8
-        cmd = f"sshpass -p {self.password} ssh -D {tunnelport} -o".split(" ") \
-              + [f"ProxyCommand=nc -X 5 -x 127.0.0.1:{self.socks} %h %p"] \
-              + [f"{self.sshName}@{self.sshHost}"]
-        self.sshProcess = subprocess.Popen(cmd,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.STDOUT)
+        #cmd = f"sshpass -p {self.password} ssh -D {tunnelport} -o".split(" ") \
+        #      + [f"ProxyCommand=nc -X 5 -x 127.0.0.1:{self.socks} %h %p"] \
+        #      + [f"{self.sshName}@{self.sshHost}"]
+        #self.sshProcess = subprocess.Popen(cmd,
+        #                      stdout=subprocess.PIPE,
+        #                      stderr=subprocess.STDOUT)
 
         # setup selenium firefox profile w/ proxy
         self.profile = webdriver.FirefoxProfile()
@@ -94,7 +106,6 @@ class TorCollector:
     def killProcesses(self):
         """ """
         self.tor.kill()
-        self.sshProcess.terminate()
         self.browser.close()
 
     def run(self,
@@ -144,26 +155,17 @@ class TorCollector:
         self.resetExit()
         self.resetEntry()
         for j in range(0, chsize):
+
+            self.launchProxy()
+            sleep(1)
+
             url = self.batch_urls.iloc[j][1]
             print(url)
             self.lastURL = url
             self.runURL(url, j, timeout_val, outflowfolder)
             self.total_count += 1
 
-        ## zip batch
-        #zipfile = f"{self.cur_batch}.zip"
-        #cmd = f"{self.ssh_cmd_prefix} zip -5 {zipfile} {outflowfolder}/*.pcap"
-        #self.runProcess(cmd.split(" "))
-
-        ## grab outflow capture from proxy
-        #scp_cmd = f"sshpass -p {self.password} scp {self.sshName}@{self.sshHost}:/home/{self.sshName}/{zipfile} outflow/"
-        #self.runProcess(scp_cmd.split(" "))
-        #if not os.path.isfile(f"outflow/{url_id}.pcap"):
-        #    print("ERROR: SCP copy failed!")
-
-        ## delete pcap from proxy
-        #cmd = f"{self.ssh_cmd_prefix} rm {zipfile} {outflowfolder}/*.pcap"
-        #self.runProcess(cmd.split(" "))
+            self.sshProcess.terminate()
 
         self.killProcesses()
         self.launchProcesses()
@@ -235,9 +237,10 @@ class TorCollector:
         """
         proc = subprocess.Popen(command,
                                 stdout=self.devnull,
-                                stderr=subprocess.STDOUT)
-        while (proc.poll() is None):
-            pass
+                                stderr=subprocess.PIPE)
+        proc.wait()
+        #while (proc.poll() is None):
+        #    pass
         proc.terminate()
 
     def killTcpDump(self):
@@ -248,7 +251,7 @@ class TorCollector:
         with open(log, 'w') as fi:
             return subprocess.Popen(command,
                                     stdout=fi,
-                                    stderr=subprocess.STDOUT, shell=True)
+                                    stderr=subprocess.PIPE, shell=True)
 
     def get_guard_ips(self, controller, flow):
         """ """
