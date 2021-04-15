@@ -177,11 +177,11 @@ class TorCollector:
         start_time = time()
 
         # start capture on proxy
-        cmd = f"{self.ssh_cmd_prefix} tcpdump -s 114 -w {outflowfolder}/{url_id}.pcap"
+        cmd = f"{self.ssh_cmd_prefix} tcpdump -w {outflowfolder}/{url_id}.pcap"
         self.tcpdumpProcessOut = self.startTcpDump(cmd, 'proxy.log')
 
         # start capture on client
-        cmd = f"LD_LIBRARY_PATH= tcpdump -s 114 -w inflow/{url_id}.pcap -i {self.host_nic}"
+        cmd = f"LD_LIBRARY_PATH= tcpdump -Z root -w inflow/{url_id}.pcap -i {self.host_nic}"
         self.tcpdumpProcessIn = self.startTcpDump(cmd, 'client.log')
 
         sleep(1)
@@ -251,7 +251,7 @@ class TorCollector:
         with open(log, 'w') as fi:
             return subprocess.Popen(command,
                                     stdout=fi,
-                                    stderr=subprocess.PIPE, shell=True)
+                                    stderr=fi, shell=True)
 
     def get_guard_ips(self, controller, flow):
         """ """
