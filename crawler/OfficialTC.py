@@ -161,8 +161,9 @@ class TorCollector:
         self.resetEntry()
         for j in range(0, chsize):
 
+            sleep(3)
             self.launchProxy()
-            sleep(1)
+            sleep(3)
 
             url = self.batch_urls.iloc[j][1]
             print(f'[{self.cur_batch}_{j}] {url}', end='\n\r')
@@ -170,7 +171,10 @@ class TorCollector:
             self.runURL(url, j, timeout_val, outflowfolder)
             self.total_count += 1
 
+            # terminate tunnel process
             self.sshProcess.terminate()
+            cmd = f"pkill ssh"
+            self.runProcess(cmd.split(" "))
 
         self.killProcesses()
         self.launchProcesses()
@@ -204,6 +208,7 @@ class TorCollector:
                            f"{self.logs_savedir}/errorSitesFULL.txt")
             self.errorSites.add((url, "Timed Out"))
             err = True
+            print(str(e))
 
         except Exception as e:
             # unknown issue
@@ -211,6 +216,7 @@ class TorCollector:
                            f"{self.logs_savedir}/errorSitesFULL.txt")
             self.errorSites.add((url, str(e)))
             err = True
+            print(str(e))
 
         timeElapsed = time() - start_time
         #if timeElapsed > 0 and not err:
@@ -242,7 +248,7 @@ class TorCollector:
         """
         proc = subprocess.Popen(command,
                                 stdout=self.devnull,
-                                stderr=subprocess.PIPE)
+                                stderr=subprocess.STDOUT)
         proc.wait()
         #while (proc.poll() is None):
         #    pass
