@@ -10,7 +10,7 @@ from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 from stem.control import Controller, CircStatus, Signal
 import stem.process
-from time import sleep, time
+from time import sleep, time, strftime
 import shutil
 import scapy.all
 import scapy.utils
@@ -50,6 +50,7 @@ class TorCollector:
         self.torrc_dict = torrc_dict
         self.ssh_cmd_prefix = f"sshpass -p {self.password} ssh -l {self.sshName} -t {self.sshHost}"
         self.host_nic = host_nic
+        self.crawldir = os.path.join('results', strftime('%y%m%d_%H%M%S'))
 
         # setup TBB environment libraries
         if tbb_path:
@@ -121,8 +122,12 @@ class TorCollector:
         self.ran = True
 
         # make client directories
+        self.outflow_savedir = os.path.join(self.crawldir, 'outflow')
+        self.logs_savedir = os.path.join(self.crawldir, 'logs')
+        self.inflow_savedir = os.path.join(self.crawldir, 'inflow')
+        self.screens_savedir = os.path.join(self.crawldir, 'screenshots')
         try:
-            for directory in ['outflow', 'inflow', 'logs', 'screenshots']:
+            for directory in [self.outflow_savedir, self.logs_savedir, self.inflow_savedir, self.screens_savedir]:
                 if not os.path.exists(directory):
                     os.makedirs(directory)
         except Exception:
@@ -160,7 +165,7 @@ class TorCollector:
             sleep(1)
 
             url = self.batch_urls.iloc[j][1]
-            print(url)
+            print(url, end='\n\r')
             self.lastURL = url
             self.runURL(url, j, timeout_val, outflowfolder)
             self.total_count += 1
@@ -178,11 +183,11 @@ class TorCollector:
 
         # start capture on proxy
         cmd = f"{self.ssh_cmd_prefix} tcpdump -w {outflowfolder}/{url_id}.pcap"
-        self.tcpdumpProcessOut = self.startTcpDump(cmd, 'proxy.log')
+        self.tcpdumpProcessOut = self.startTcpDump(cmd, f'{self.logs_savedir}/proxy_{url_id}.log')
 
         # start capture on client
-        cmd = f"LD_LIBRARY_PATH= tcpdump -Z root -w inflow/{url_id}.pcap -i {self.host_nic}"
-        self.tcpdumpProcessIn = self.startTcpDump(cmd, 'client.log')
+        cmd = f"LD_LIBRARY_PATH= tcpdump -Z root -w {self.inflow_savedir}/{url_id}.pcap -i {self.host_nic}"
+        self.tcpdumpProcessIn = self.startTcpDump(cmd, f'{self.logs_savedir}/client_{url_id}.log')
 
         sleep(1)
 
@@ -191,19 +196,19 @@ class TorCollector:
         try:
             with time_limit(timeout_val):
                 self.browser.get("http://" + url)
-                self.browser.save_screenshot(f'screenshots/{url_id}.png')
+                self.browser.save_screenshot(f'{self.screens_savedir}/{url_id}.png')
 
         except TimeoutException as e:
             # site timed-out due to either length or is unavailable
             self.writeFile("{}: {}\n".format(url, "Timed Out"),
-                           "logs/errorSitesFULL.txt")
+                           f"{self.logs_savedir}/errorSitesFULL.txt")
             self.errorSites.add((url, "Timed Out"))
             err = True
 
         except Exception as e:
             # unknown issue
             self.writeFile("{}: {}\n".format(url, str(e)),
-                           "logs/errorSitesFULL.txt")
+                           f"{self.logs_savedir}/errorSitesFULL.txt")
             self.errorSites.add((url, str(e)))
             err = True
 
@@ -214,9 +219,9 @@ class TorCollector:
         self.killTcpDump()
 
         # grab outflow capture from proxy
-        scp_cmd = f"sshpass -p {self.password} scp {self.sshName}@{self.sshHost}:/home/{self.sshName}/{outflowfolder}/{url_id}.pcap outflow/"
+        scp_cmd = f"sshpass -p {self.password} scp {self.sshName}@{self.sshHost}:/home/{self.sshName}/{outflowfolder}/{url_id}.pcap {self.outflow_savedir}"
         self.runProcess(scp_cmd.split(" "))
-        if not os.path.isfile(f"outflow/{url_id}.pcap"):
+        if not os.path.isfile(f"{self.outflow_savedir}/{url_id}.pcap"):
             print("ERROR: SCP copy failed!")
 
         # delete pcap from proxy
@@ -225,7 +230,7 @@ class TorCollector:
 
         # log elapsed time
         self.writeFile(string = f"[{url_id}] {url} visit in {timeElapsed}, full process in {time() - start_time}\n", 
-                       filename = f"logs/timeElapsed.txt")
+                       filename = f"{self.logs_savedir}/timeElapsed.txt")
 
     def writeFile(self, string, filename):
         with open(filename, "a") as file:
@@ -246,6 +251,9 @@ class TorCollector:
     def killTcpDump(self):
         self.tcpdumpProcessIn.terminate()
         self.tcpdumpProcessOut.terminate()
+        cmd = f"{self.ssh_cmd_prefix} pkill tcpdump"
+        self.runProcess(cmd.split(" "))
+
 
     def startTcpDump(self, command, log):
         with open(log, 'w') as fi:
@@ -272,7 +280,7 @@ class TorCollector:
         with Controller.from_port(port=self.control) as cont:
             cont.authenticate()
             cont.signal(Signal.NEWNYM)
-            with open("logs/exitIps.txt", "a") as file:
+            with open(f"{self.logs_savedir}/exitIps.txt", "a") as file:
                 file.write(' '.join(self.get_guard_ips(cont, -1)) + '\n')
 
     def resetEntry(self):
@@ -281,7 +289,7 @@ class TorCollector:
             cont.authenticate()
             cont.drop_guards(
             )  #Not sure how to check the entry nodes and middle nodes yet, so it is unconfirmed if this change works properly
-            with open("logs/entryIps.txt", "a") as file:
+            with open(f"{self.logs_savedir}/entryIps.txt", "a") as file:
                 file.write(' '.join(self.get_guard_ips(cont, 0)) + '\n')
 
     def __del__(self):
