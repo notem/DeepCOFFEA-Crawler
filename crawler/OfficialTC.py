@@ -59,7 +59,7 @@ class TorCollector:
             self.tor_data_path = os.path.join(tbb_path, DEFAULT_TOR_DATA_PATH)
         os.environ["LD_LIBRARY_PATH"] = os.path.dirname(self.tor_binary_path)
 
-        self.launchProcesses()
+        self.launchTor()
 
     def launchProxy(self):
         """
@@ -73,7 +73,7 @@ class TorCollector:
                               stderr=subprocess.PIPE)
 
 
-    def launchProcesses(self):
+    def launchTor(self):
         """
         """
         # launch tor process
@@ -91,23 +91,22 @@ class TorCollector:
         #                      stdout=subprocess.PIPE,
         #                      stderr=subprocess.STDOUT)
 
+    def launchBrowser(self):
+        """ """
         # setup selenium firefox profile w/ proxy
         self.profile = webdriver.FirefoxProfile()
         self.profile.set_preference('network.proxy.type', 1)
         self.profile.set_preference("network.proxy.socks_version", 5)
         self.profile.set_preference('network.proxy.socks', '127.0.0.1')
-        self.profile.set_preference('network.proxy.socks_port', tunnelport)
+        self.profile.set_preference('network.proxy.socks_port', self.socks + 8)
 
-    def launchBrowser(self):
-        """ """
         options = Options()
         options.headless = True
         self.browser = webdriver.Firefox(self.profile, options=options)
 
-    def killProcesses(self):
+    def killTor(self):
         """ """
         self.tor.kill()
-        self.browser.close()
 
     def run(self,
             start,
@@ -162,6 +161,7 @@ class TorCollector:
         for j in range(0, chsize):
 
             sleep(3)
+            self.launchBrowser()
             self.launchProxy()
             sleep(3)
 
@@ -176,9 +176,10 @@ class TorCollector:
             cmd = f"pkill ssh"
             self.runProcess(cmd.split(" "))
 
-        self.killProcesses()
-        self.launchProcesses()
-        self.launchBrowser()
+            self.browser.close()
+
+        self.killTor()
+        self.launchTor()
 
     def runURL(self, url, j, timeout_val, outflowfolder):
         """ """
@@ -219,9 +220,8 @@ class TorCollector:
             print(str(e))
 
         timeElapsed = time() - start_time
-        #if timeElapsed > 0 and not err:
-        #    sleep(timeout_val - timeElapsed)
-        sleep(3)
+        if timeElapsed > 0 and timeElapsed < 60 and not err:
+            sleep(60 - timeElapsed)
         self.killTcpDump()
 
         # grab outflow capture from proxy
@@ -258,6 +258,8 @@ class TorCollector:
         self.tcpdumpProcessIn.terminate()
         self.tcpdumpProcessOut.terminate()
         cmd = f"{self.ssh_cmd_prefix} pkill tcpdump"
+        self.runProcess(cmd.split(" "))
+        cmd = f"pkill tcpdump"
         self.runProcess(cmd.split(" "))
 
 
@@ -302,4 +304,4 @@ class TorCollector:
         """
         """
         if(self.ran):
-            self.killProcesses()
+            self.killTor()
