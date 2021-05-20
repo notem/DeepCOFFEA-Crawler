@@ -160,6 +160,7 @@ class TorCollector:
         self.resetEntry()
         for j in range(0, chsize):
             with Controller.from_port(port=self.control) as cont:
+                cont.authenticate()
                 entryIPs = set(self.get_guard_ips(cont, 0))
                 exitIPs = set(self.get_guard_ips(cont, -1))
 
@@ -180,6 +181,7 @@ class TorCollector:
             self.runProcess(cmd.split(" "))
             
             with Controller.from_port(port=self.control) as cont:
+                cont.authenticate()
                 entryIPs.update(set(self.get_guard_ips(cont, 0)))
                 exitIPs.update(set(self.get_guard_ips(cont, -1)))
             with open(f"{self.logs_savedir}/exitIps.txt", "a") as file:
