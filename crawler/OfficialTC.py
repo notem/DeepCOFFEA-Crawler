@@ -175,8 +175,14 @@ class TorCollector:
             self.sshProcess.terminate()
             cmd = f"pkill ssh"
             self.runProcess(cmd.split(" "))
-
-            self.browser.close()
+            
+            with open(f"{self.logs_savedir}/exitIps.txt", "a") as file:
+                file.write(' '.join(self.get_guard_ips(cont, -1)) + '\n')
+            with open(f"{self.logs_savedir}/entryIps.txt", "a") as file:
+                file.write(' '.join(self.get_guard_ips(cont, 0)) + '\n')
+            try:
+                self.browser.close()
+            except: pass
 
         self.killTor()
         self.launchTor()
@@ -288,8 +294,6 @@ class TorCollector:
         with Controller.from_port(port=self.control) as cont:
             cont.authenticate()
             cont.signal(Signal.NEWNYM)
-            with open(f"{self.logs_savedir}/exitIps.txt", "a") as file:
-                file.write(' '.join(self.get_guard_ips(cont, -1)) + '\n')
 
     def resetEntry(self):
         """ """
@@ -297,8 +301,6 @@ class TorCollector:
             cont.authenticate()
             cont.drop_guards(
             )  #Not sure how to check the entry nodes and middle nodes yet, so it is unconfirmed if this change works properly
-            with open(f"{self.logs_savedir}/entryIps.txt", "a") as file:
-                file.write(' '.join(self.get_guard_ips(cont, 0)) + '\n')
 
     def __del__(self):
         """
