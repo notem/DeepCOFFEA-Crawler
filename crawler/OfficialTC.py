@@ -159,6 +159,9 @@ class TorCollector:
         self.resetExit()
         self.resetEntry()
         for j in range(0, chsize):
+            with Controller.from_port(port=self.control) as cont:
+                entryIPs = set(self.get_guard_ips(cont, 0))
+                exitIPs = set(self.get_guard_ips(cont, -1))
 
             sleep(3)
             self.launchBrowser()
@@ -176,10 +179,13 @@ class TorCollector:
             cmd = f"pkill ssh"
             self.runProcess(cmd.split(" "))
             
+            with Controller.from_port(port=self.control) as cont:
+                entryIPs.update(set(self.get_guard_ips(cont, 0)))
+                exitIPs.update(set(self.get_guard_ips(cont, -1)))
             with open(f"{self.logs_savedir}/exitIps.txt", "a") as file:
-                file.write(' '.join(self.get_guard_ips(cont, -1)) + '\n')
+                file.write(' '.join(exitIPs) + '\n')
             with open(f"{self.logs_savedir}/entryIps.txt", "a") as file:
-                file.write(' '.join(self.get_guard_ips(cont, 0)) + '\n')
+                file.write(' '.join(entryIPs) + '\n')
             try:
                 self.browser.close()
             except: pass
