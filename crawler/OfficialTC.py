@@ -76,7 +76,6 @@ class TorCollector:
     def launchProxy(self):
         """
         """
-        print(self.tunnelport)
         cmd = f"sshpass -p {self.password} ssh -D {self.tunnelport} -o".split(" ") \
               + [f"ProxyCommand=nc -X 5 -x 127.0.0.1:{self.socks} %h %p"] \
               + [f"{self.sshName}@{self.sshHost}"]
@@ -192,13 +191,7 @@ class TorCollector:
 
             sleep(3)
             self.launchProxy()
-            sleep(10)
-            import psutil
-            connections = psutil.net_connections()
-            for connection in connections:
-                if connection.status == 'LISTEN':
-                    print(f"\r{connection}")
-            sleep(2)
+            sleep(3)
             self.launchBrowser()
             sleep(3)
 
