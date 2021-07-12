@@ -15,6 +15,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get --assume-yes --yes install xvfb firef
 RUN DEBIAN_FRONTEND=noninteractive apt-get --assume-yes --yes install netcat
 RUN DEBIAN_FRONTEND=noninteractive apt-get --assume-yes --yes install sshpass
 RUN DEBIAN_FRONTEND=noninteractive apt-get --assume-yes --yes install iproute2
+RUN DEBIAN_FRONTEND=noninteractive apt-get --assume-yes --yes install obfs4proxy
 RUN apt-get clean \
 	&& rm -rf /var/lib/apt/lists/*
 

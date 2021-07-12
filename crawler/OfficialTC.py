@@ -1,5 +1,6 @@
 import signal
 import os
+from os.path import join, abspath, dirname, pardir
 from contextlib import contextmanager
 from tbselenium.common import DEFAULT_TOR_DATA_PATH, DEFAULT_TOR_BINARY_PATH
 
@@ -8,6 +9,11 @@ import os
 import psutil
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
+
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from tbselenium.tbdriver import TorBrowserDriver
+from tbselenium.common import USE_RUNNING_TOR
+
 from stem.control import Controller, CircStatus, Signal
 import stem.process
 from time import sleep, time, strftime
@@ -15,6 +21,10 @@ import shutil
 import scapy.all
 import scapy.utils
 import pandas
+
+
+
+BASE_DIR = abspath(join(dirname(__file__), pardir))
 
 
 class TimeoutException(Exception):
@@ -36,7 +46,7 @@ def time_limit(seconds):
 
 class TorCollector:
 
-    def __init__(self, name, host, password, torrc_dict, tbb_path, host_nic):
+    def __init__(self, name, host, password, torrc_dict, ffprefs, tbb_path, host_nic):
         """
         Initializes Torcollector, param size is the number of websites to scan from the csv, and param length is how many packets to capture per flow 
         """
@@ -45,18 +55,20 @@ class TorCollector:
         self.ran = False
         self.sshHost = host
         self.socks = int(torrc_dict['socksport'])
+        self.tunnelport = self.socks + 100
         self.control = int(torrc_dict['controlport'])
         self.devnull = open(os.devnull, 'w')
         self.torrc_dict = torrc_dict
+        self.ffprefs = ffprefs
         self.ssh_cmd_prefix = f"sshpass -p {self.password} ssh -l {self.sshName} -t {self.sshHost}"
         self.host_nic = host_nic
-        self.crawldir = os.path.join('results', strftime('%y%m%d_%H%M%S'))
+        self.crawldir = join(BASE_DIR, 'results', strftime('%y%m%d_%H%M%S'))
 
         # setup TBB environment libraries
         if tbb_path:
-            tbb_path = tbb_path.rstrip('/')
-            self.tor_binary_path = os.path.join(tbb_path, DEFAULT_TOR_BINARY_PATH)
-            self.tor_data_path = os.path.join(tbb_path, DEFAULT_TOR_DATA_PATH)
+            self.tbb_path = tbb_path.rstrip('/')
+            self.tor_binary_path = join(self.tbb_path, DEFAULT_TOR_BINARY_PATH)
+            self.tor_data_path = join(self.tbb_path, DEFAULT_TOR_DATA_PATH)
         os.environ["LD_LIBRARY_PATH"] = os.path.dirname(self.tor_binary_path)
 
         self.launchTor()
@@ -64,14 +76,18 @@ class TorCollector:
     def launchProxy(self):
         """
         """
-        tunnelport = self.socks + 8
-        cmd = f"sshpass -p {self.password} ssh -D {tunnelport} -o".split(" ") \
+        print(self.tunnelport)
+        cmd = f"sshpass -p {self.password} ssh -D {self.tunnelport} -o".split(" ") \
               + [f"ProxyCommand=nc -X 5 -x 127.0.0.1:{self.socks} %h %p"] \
               + [f"{self.sshName}@{self.sshHost}"]
-        self.sshProcess = subprocess.Popen(cmd,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE)
 
+        with open(join(BASE_DIR, 'proxy.log'), 'w') as fi:
+            self.sshProcess = subprocess.Popen(cmd,
+                                    stdout=fi,
+                                    stderr=fi)
+        #self.sshProcess = subprocess.Popen(cmd,
+        #                      stdout=subprocess.PIPE,
+        #                      stderr=subprocess.PIPE)
 
     def launchTor(self):
         """
@@ -81,9 +97,10 @@ class TorCollector:
         self.tor = stem.process.launch_tor_with_config(
                        config=self.torrc_dict, 
                        tor_cmd=self.tor_binary_path, 
-                       timeout=270)
+                       close_output=False,
+                       timeout=120)
         # launch proxy
-        tunnelport = self.socks + 8
+        #tunnelport = self.socks + 8
         #cmd = f"sshpass -p {self.password} ssh -D {tunnelport} -o".split(" ") \
         #      + [f"ProxyCommand=nc -X 5 -x 127.0.0.1:{self.socks} %h %p"] \
         #      + [f"{self.sshName}@{self.sshHost}"]
@@ -93,12 +110,22 @@ class TorCollector:
 
     def launchBrowser(self):
         """ """
+
+        #caps = DesiredCapabilities().FIREFOX
+        #self.browser = TorBrowserDriver(self.tbb_path, 
+        #                       capabilities=caps, 
+        #                       tbb_logfile_path=join(BASE_DIR, 'tor.log'),
+        #                       tor_cfg=USE_RUNNING_TOR,
+        #                       pref_dict=self.ffprefs,
+        #                       socks_port=self.tunnelport, 
+        #                       headless=True)
+
         # setup selenium firefox profile w/ proxy
         self.profile = webdriver.FirefoxProfile()
         self.profile.set_preference('network.proxy.type', 1)
         self.profile.set_preference("network.proxy.socks_version", 5)
         self.profile.set_preference('network.proxy.socks', '127.0.0.1')
-        self.profile.set_preference('network.proxy.socks_port', self.socks + 8)
+        self.profile.set_preference('network.proxy.socks_port', self.tunnelport)
 
         options = Options()
         options.headless = True
@@ -112,7 +139,7 @@ class TorCollector:
             start,
             batch_count,
             chsize,
-            webFile="top-1m.csv",
+            webFile="./top-1m.csv",
             timeout_val=120,
             outflowfolder="outflow"):
         """ 
@@ -121,10 +148,10 @@ class TorCollector:
         self.ran = True
 
         # make client directories
-        self.outflow_savedir = os.path.join(self.crawldir, 'outflow')
-        self.logs_savedir = os.path.join(self.crawldir, 'logs')
-        self.inflow_savedir = os.path.join(self.crawldir, 'inflow')
-        self.screens_savedir = os.path.join(self.crawldir, 'screenshots')
+        self.outflow_savedir = join(self.crawldir, 'outflow')
+        self.logs_savedir = join(self.crawldir, 'logs')
+        self.inflow_savedir = join(self.crawldir, 'inflow')
+        self.screens_savedir = join(self.crawldir, 'screenshots')
         try:
             for directory in [self.outflow_savedir, self.logs_savedir, self.inflow_savedir, self.screens_savedir]:
                 if not os.path.exists(directory):
@@ -140,7 +167,6 @@ class TorCollector:
         self.read_pos = start
 
         # launch the webdriver
-        self.launchBrowser()
         for batch_no in range(batch_count):
             self.cur_batch = batch_no
 
@@ -165,8 +191,15 @@ class TorCollector:
                 exitIPs = set(self.get_guard_ips(cont, -1))
 
             sleep(3)
-            self.launchBrowser()
             self.launchProxy()
+            sleep(10)
+            import psutil
+            connections = psutil.net_connections()
+            for connection in connections:
+                if connection.status == 'LISTEN':
+                    print(f"\r{connection}")
+            sleep(2)
+            self.launchBrowser()
             sleep(3)
 
             url = self.batch_urls.iloc[j][1]
@@ -182,7 +215,7 @@ class TorCollector:
             
             with Controller.from_port(port=self.control) as cont:
                 cont.authenticate()
-                entryIPs.update(set(self.get_guard_ips(cont, 0)))
+                #entryIPs.update(set(self.get_guard_ips(cont, 0)))
                 exitIPs.update(set(self.get_guard_ips(cont, -1)))
             with open(f"{self.logs_savedir}/exitIps.txt", "a") as file:
                 file.write(' '.join(exitIPs) + '\n')
@@ -287,12 +320,20 @@ class TorCollector:
         """ """
         ips = []
         for circ in controller.get_circuits():
-            # filter empty circuits out
-            if len(circ.path) == 0:
-                continue
-            ip = controller.get_network_status(circ.path[flow][0]).address
-            if ip not in ips:
-                ips.append(ip)
+            try:
+                # filter empty circuits out
+                if len(circ.path) == 0:
+                    continue
+                if circ.status != CircStatus.BUILT:
+                    continue
+                exit_fp, exit_nickname = circ.path[-1]
+                desc = controller.get_network_status(exit_fp, None)
+                if desc is None: continue  # don't know why this happens sometimes, but is specific to using a bridge
+                ip = desc.address
+                if ip not in ips:
+                    ips.append(ip)
+            except Exception as e:
+                print(e)
         return ips
 
     def resetExit(self):

@@ -1,8 +1,9 @@
-from OfficialTC import TorCollector
+from OfficialTC import TorCollector, BASE_DIR
 from argparse import ArgumentParser 
 from tbselenium.utils import start_xvfb, stop_xvfb
 import configparser
 import os
+from os.path import abspath, join, dirname, pardir
 
 
 def get_dict_subconfig(config, section, prefix):
@@ -27,10 +28,10 @@ def main():
     args = parser.parse_args()
 
     config = configparser.RawConfigParser()
-    config.read("./config.ini")
+    config.read(join(BASE_DIR, "config.ini"))
 
     torrc_config = get_dict_subconfig(config, args.config, "torrc")
-    #ffprefs = get_dict_subconfig(config, args.config, "ffpref")
+    ffprefs = get_dict_subconfig(config, args.config, "ffpref")
 
     # Setup stem headless display
     xvfb_h = int(args.virtual_display.split('x')[0])
@@ -38,9 +39,9 @@ def main():
     xvfb_display = start_xvfb(xvfb_w, xvfb_h)
 
     try:
-        tbb_path = os.path.abspath('./tor-browser_en-US')
-        collector = TorCollector(args.user, args.host, args.password, torrc_config, tbb_path, args.nic)
-        collector.run(args.start, args.batches, args.chunksize, webFile=args.sites)
+        tbb_path = join(BASE_DIR, 'tor-browser_en-US')
+        collector = TorCollector(args.user, args.host, args.password, torrc_config, ffprefs, tbb_path, args.nic)
+        collector.run(args.start, args.batches, args.chunksize, webFile=join(BASE_DIR, args.sites))
     finally:
         # Close display
         stop_xvfb(xvfb_display)
